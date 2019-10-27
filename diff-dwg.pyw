@@ -151,17 +151,22 @@ def pdf2png(pdf, temp):
     pdf = str(pdf)
     base = os.path.basename(pdf)
     basefile = os.path.splitext(base)
-    png = join(temp, basefile[0] + ".png")
     print(pdf)
-    print(png)
     doc = fitz.open(pdf)
     xres = 2
     yres = 2
     mat = fitz.Matrix(xres, yres)
+    print("There are {} pages in this file".format(len(doc)))
+    pngs = []
+    pagenum = 1
     for page in doc:
+        png = join(temp, basefile[0] + "_" + str(pagenum) + ".png")
         pix = page.getPixmap(matrix=mat, colorspace="rgb", alpha=False)
         pix.writePNG(png)
-    return png
+        pngs.append(png)
+        pagenum += 1
+        print(png)
+    return pngs
 
 
 def maketmp(temp):
@@ -252,8 +257,8 @@ def process_batch():
                         filePath1 = join(olddir, old_f)
                         filePath2 = join(newdir, new_f)
                         print(filePath1)
-                        img1_file = pdf2png(filePath1, tempdir)
-                        img2_file = pdf2png(filePath2, tempdir)
+                        img1_file = pdf2png(filePath1, tempdir)[0]  # only first page
+                        img2_file = pdf2png(filePath2, tempdir)[0]  # only first page
                         im1, im2 = Image.open(img2_file), Image.open(img1_file)
                         file_string = os.path.splitext(os.path.basename(new_f))[0] + "-diff.png"
                         if im1.size[0] == im2.size[0] and im1.size[1] == im2.size[1]:
@@ -281,25 +286,28 @@ def process_batch():
 def process_images():
     global filePath1, filePath2, v, size_check
     start = timeit.default_timer()
-    img1_file = pdf2png(filePath1, tempdir)
-    img2_file = pdf2png(filePath2, tempdir)
-    im1, im2 = Image.open(img2_file), Image.open(img1_file)
-    file_string = os.path.splitext(os.path.basename(filePath1))[0] + "-diff.png"
-    if im1.size[0] == im2.size[0] and im1.size[1] == im2.size[1]:
-        print("Drawing sizes match")
-        dispimg = join(diffdir, file_string)
-        print(newdir)
-        print(olddir)
-        print(diffdir)
-        print(dispimg)
-        anaglyph(im1, im2, color2_anaglyph).save(dispimg, quality=90)
-        watermark_text(dispimg, dispimg, "UNCONTROLLED COPY", pos=(0, 0))
-    else:
-        print("Drawing size mismatch.")
-        size_check = 1
-    del im1, im2
-    os.remove(img1_file)
-    os.remove(img2_file)
+    img1_files = pdf2png(filePath1, tempdir)
+    img2_files = pdf2png(filePath2, tempdir)
+    pages = min(len(img1_files), len(img2_files))
+
+    for p in range(0, pages):
+        im1, im2 = Image.open(img2_files[p]), Image.open(img1_files[p])
+        file_string = os.path.splitext(os.path.basename(filePath1))[0] + "_" + str(p+1) + "-diff.png"
+
+        if im1.size[0] == im2.size[0] and im1.size[1] == im2.size[1]:
+            print("Drawing sizes match")
+            dispimg = join(diffdir, file_string)
+            anaglyph(im1, im2, color2_anaglyph).save(dispimg, quality=90)
+            watermark_text(dispimg, dispimg, "UNCONTROLLED COPY", pos=(0, 0))
+        else:
+            print("Drawing size mismatch.")
+            size_check = 1
+        del im1, im2
+    for im in img1_files:
+        os.remove(im)
+    for im in img2_files:
+        os.remove(im)
+
     stop = timeit.default_timer()
     print("Run time was", stop - start)
     print("Done")

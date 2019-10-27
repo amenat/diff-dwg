@@ -55,3 +55,4 @@ target/
 
 # Test PDFs
 test/
+.idea/
